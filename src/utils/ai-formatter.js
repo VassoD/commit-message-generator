@@ -20,15 +20,15 @@ export const generateAICommitMessage = async () => {
     const filesChanged = execSync("git diff --staged --name-only").toString();
 
     const prompt = `
-    Generate a conventional commit message based on the exact code changes in the diff. The type should accurately represent the nature of the change, and the description should precisely describe what was modified.
+    Generate a conventional commit message based on the exact code changes in the diff. The type should accurately represent the nature of the change, and the description should precisely describe what was modified. Keep the description concise and under 50 characters.
     
     Rules:
-    1. Use the "docs" type for changes to documentation files, such as README.md.
+    1. Use the "docs" type for changes to documentation, comments, or README.md.
     2. Use the "style" type ONLY for changes involving formatting, whitespace, or indentation.
     3. Use the "refactor" type for improvements to functionality or code structure.
     4. Use the "chore" type for maintenance tasks like dependency updates or configuration changes.
-    5. Be specific in the description: mention exactly what was changed, including numerical values or configuration options.
-    6. Do not pass 100 characters in the message.
+    5. Always include a scope in the format: type(scope): description.
+    6. Be specific in the description: mention exactly what was changed, but keep it concise.
     
     Format: type(scope): description
     
@@ -40,12 +40,12 @@ export const generateAICommitMessage = async () => {
     - refactor: code restructuring
     - test: testing
     - chore: maintenance
-
+    
     Files changed:
     ${filesChanged}
     
     Exact changes:
-    ${stagedDiff.slice(0, 1000)}
+    ${stagedDiff.slice(0, 3000)}
     
     Respond ONLY with the commit message in the specified format, including specific details like numerical changes.
     `;
