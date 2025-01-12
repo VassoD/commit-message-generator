@@ -1,4 +1,3 @@
-// src/utils/ai-formatter.js
 import { execSync } from "child_process";
 import { CohereClient } from "cohere-ai";
 import dotenv from "dotenv";
@@ -21,61 +20,40 @@ export const generateAICommitMessage = async () => {
     const filesChanged = execSync("git diff --staged --name-only").toString();
 
     const prompt = `
-        Analyze these git changes and generate ONE precise commit message.
-        Focus on exactly what was modified in the code.
-
-        FORMAT (EXACTLY AS SHOWN):
-        type(scope): specific_change_description
-
-        TYPES (use one):
-        - feat: New features
-        - fix: Bug fixes
-        - refactor: Code improvements
-        - docs: Documentation
-        - style: Formatting only
-        - test: Test changes
-        - chore: Maintenance
-
-        SCOPE:
-        - Must be in parentheses
-        - Use exact directory name from changed files
-        - Example: feat(utils): or fix(api):
-
-        DESCRIPTION:
-        - Describe the EXACT change made
-        - Be specific about what was modified
-        - Keep it under 50 chars
-        - No period at end
-
-        GOOD EXAMPLES:
-        refactor(prompt): restructure AI instruction format
-        fix(cleanup): add missing parentheses handling
-        docs(format): update commit message examples
-
-        BAD EXAMPLES:
-        refactor(utils): improve functionality
-        fix(api): update code
-        style: make changes
-
-        FILES CHANGED:
-        ${filesChanged}
-
-        CHANGES:
-        ${stagedDiff.slice(0, 1500)}
-
-        IMPORTANT: Return ONLY a single-line commit message that precisely describes the actual code changes made.`;
+    Generate a conventional commit message based on the exact code changes in the diff. The type should accurately represent the nature of the change, and the description should precisely describe what was modified. Ensure the type accurately reflects the nature of the change: use 'chore' for maintenance tasks, 'feat' for new features, 'fix' for bug fixes, etc. Be specific in the description: mention exactly what was changed, including any numerical values or code elements affected.
+    
+    Format: type(scope): description
+    
+    Types:
+    - feat: new features
+    - fix: bug fixes
+    - docs: documentation
+    - style: formatting
+    - refactor: code restructuring
+    - test: testing
+    - chore: maintenance
+    
+    Examples:
+    - feat(user/auth): add login functionality
+    - fix(database/connection): resolve connection issues
+    
+    Files changed:
+    ${filesChanged}
+    
+    Exact changes:
+    ${stagedDiff.slice(0, 1500)}
+    
+    Respond ONLY with the commit message in the specified format, including specific details like numerical changes.
+    `;
 
     const response = await cohere.generate({
       prompt: prompt,
-      maxTokens: 50,
-      temperature: 0.1,
-      k: 0,
-      p: 0.75,
-      frequency_penalty: 0.5,
-      presence_penalty: 0.5,
+      maxTokens: 100,
+      temperature: 0.0,
       stopSequences: ["\n"],
-      returnLikelihoods: "NONE",
     });
+
+    console.log(response);
 
     if (!response.generations || response.generations.length === 0) {
       throw new Error("No response from Cohere API");
@@ -86,18 +64,11 @@ export const generateAICommitMessage = async () => {
     // Enhanced cleanup of AI artifacts
     message = message
       .replace(/^["']|["']$/g, "") // Remove quotes
-      .replace(/^.*here is a suggested conventional commit message:\s*/i, "") // Remove verbose preamble
-      .replace(/^commit message:?\s*/i, "") // Remove "commit message:" prefix
-      .replace(/^I suggest:?\s*/i, "") // Remove "I suggest" prefix
-      .replace(/^suggested commit:?\s*/i, "") // Remove "suggested commit" prefix
+      .replace(
+        /^(Here is|Here's|I suggest|Suggested|Commit message|A commit message|The commit message|You can use|Consider this|Try this|Perhaps|Maybe|Suggestion|Recommendation|Proposal|uggestion|Proposal):?\s*/i,
+        ""
+      ) // Remove verbose preamble
       .replace(/\.$/, "") // Remove trailing period
-      .replace(/[(*)]/g, "") // Remove asterisks and parentheses at the end
-      .replace(/\/+/g, "-") // Replace slashes with hyphens in scope
-      .replace(/^[^a-z]+/i, "") // Remove any non-letter characters from start
-      .replace(/([a-z]+)([A-Z][a-z]+)/g, "$1-$2") // Add hyphen between camelCase words
-      // Fix scope formatting
-      .replace(/^(feat|fix|docs|style|refactor|test|chore)([a-z]+)/, "$1($2)") // Add missing parentheses
-      .toLowerCase() // Ensure lowercase
       .trim();
 
     // Validate the message follows conventional commit format
@@ -118,6 +89,6 @@ export const generateAICommitMessage = async () => {
 // Utility function to validate commit message format
 const isValidCommitMessage = (message) => {
   const conventionalCommitRegex =
-    /^(feat|fix|docs|style|refactor|test|chore)(\([a-z0-9-]+\))?: [a-z].+/;
+    /^(feat|fix|docs|style|refactor|test|chore)\([a-z0-9-\/]+\): [a-zA-Z0-9- _.,]+$/;
   return conventionalCommitRegex.test(message);
 };
