@@ -1,0 +1,35 @@
+{
+  "name": "commit-message-generator",
+  "version": "1.0.0",
+  "description": "A tool that generates meaningful git commit messages based on changes",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "commit-gen": "./bin/commit-gen"
+  },
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint src/**/*.js",
+    "format": "prettier --write .",
+    "start": "node src/index.js"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "message",
+    "generator",
+    "cli"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "cohere-ai": "^7.15.2",
+    "commander": "^11.0.0",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "eslint": "^8.0.0",
+    "jest": "^29.0.0",
+    "prettier": "^3.0.0"
+  }
+}
