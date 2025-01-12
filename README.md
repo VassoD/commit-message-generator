@@ -63,9 +63,9 @@ To generate a commit message:
 
 To view detailed statistics along with the commit message:
 
-````bash
+```bash
 commit-gen --detailed
-
+```
 
 Example outputs:
 
@@ -81,7 +81,7 @@ Change statistics:
 Files changed: 3
 Lines added: 45
 Lines deleted: 12
-````
+```
 
 ## Development 👩‍💻
 
