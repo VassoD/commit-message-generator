@@ -13,7 +13,9 @@ An AI-powered CLI tool for generating concise, meaningful, and conventional git 
 
 - Node.js >= 16
 - Git installed and configured
-- A Cohere API key
+- A Cohere API key (free tier available at [cohere.com](https://cohere.com))
+  - See [rate limits documentation](https://docs.cohere.com/docs/rate-limits)
+  - Can be replaced with other AI models by modifying the formatter
 
 ## Installation 🚀
 
