@@ -2,6 +2,8 @@
 
 An AI-powered CLI tool for generating concise, meaningful, and conventional git commit messages based on your staged changes. This tool uses Cohere AI to analyze your changes and output standardized commit messages that follow the conventional commit format.
 
+> **Note**: All commits in this repository are currently AI-generated using this tool, serving as a real-world demonstration of its capabilities and performance history.
+
 ## Features ✨
 
 - AI-powered commit message generation
