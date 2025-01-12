@@ -70,11 +70,11 @@ export const generateAICommitMessage = async () => {
     // Enhanced cleanup of AI artifacts
     message = message
       .replace(/^["']|["']$/g, "") // Remove quotes
+      .replace(/\s*\([^)]*\)\s*$/, "") // Remove trailing parentheses with content
       .replace(
-        /^(Here is|Here's|I suggest|Suggested|Commit message|A commit message|The commit message|You can use|Consider this|Try this|Perhaps|Maybe|Suggestion|Recommendation|Proposal|uggestion|Proposal):?\s*/i,
-        ""
-      ) // Remove verbose preamble
-      .replace(/\.$/, "") // Remove trailing period
+        /^(.*?)(\([^)]+\))/,
+        (_, type, scope) => `${type}${scope.toLowerCase()}`
+      ) // Convert scope to lowercase
       .trim();
 
     console.log("Cleaned message:", message);
@@ -97,6 +97,6 @@ export const generateAICommitMessage = async () => {
 // Utility function to validate commit message format
 const isValidCommitMessage = (message) => {
   const conventionalCommitRegex =
-    /^(feat|fix|docs|style|refactor|test|chore)\([a-zA-Z0-9-\/_.]+\): [a-zA-Z0-9- _.,]+$/;
+    /^(feat|fix|docs|style|refactor|test|chore)\([a-zA-Z0-9-_/.]+\): [a-zA-Z0-9- _.,]+$/;
   return conventionalCommitRegex.test(message);
 };
