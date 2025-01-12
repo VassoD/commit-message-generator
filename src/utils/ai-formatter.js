@@ -19,9 +19,8 @@ export const generateAICommitMessage = async () => {
     const stagedDiff = execSync("git diff --staged").toString();
     const filesChanged = execSync("git diff --staged --name-only").toString();
 
-    const prompt = `
-    Generate a conventional commit message based on the exact code changes in the diff. The type should accurately represent the nature of the change, and the description should precisely describe what was modified. Ensure the type accurately reflects the nature of the change: use 'chore' for maintenance tasks, 'feat' for new features, 'fix' for bug fixes, etc. Be specific in the description: mention exactly what was changed, including any numerical values or code elements affected.
-    
+    const prompt = `Generate a conventional commit message based on the exact code changes in the diff. The type should accurately represent the nature of the change, and the description should precisely describe what was modified. Focus on functionality improvements, such as handling edge cases or refining commit validation logic. Do not use the "style" type unless the changes explicitly involve formatting or whitespace.    
+   
     Format: type(scope): description
     
     Types:
@@ -33,15 +32,12 @@ export const generateAICommitMessage = async () => {
     - test: testing
     - chore: maintenance
     
-    Examples:
-    - feat(user/auth): add login functionality
-    - fix(database/connection): resolve connection issues
     
     Files changed:
     ${filesChanged}
     
     Exact changes:
-    ${stagedDiff.slice(0, 1500)}
+    ${stagedDiff.slice(0, 3000)}
     
     Respond ONLY with the commit message in the specified format, including specific details like numerical changes.
     `;
@@ -49,17 +45,19 @@ export const generateAICommitMessage = async () => {
     const response = await cohere.generate({
       prompt: prompt,
       maxTokens: 100,
-      temperature: 0.0,
+      temperature: 0.1,
       stopSequences: ["\n"],
     });
 
-    console.log(response);
+    console.log("Raw response from model:", response);
 
     if (!response.generations || response.generations.length === 0) {
       throw new Error("No response from Cohere API");
     }
 
     let message = response.generations[0].text.trim();
+
+    console.log("Raw message from model:", message);
 
     // Enhanced cleanup of AI artifacts
     message = message
@@ -70,6 +68,8 @@ export const generateAICommitMessage = async () => {
       ) // Remove verbose preamble
       .replace(/\.$/, "") // Remove trailing period
       .trim();
+
+    console.log("Cleaned message:", message);
 
     // Validate the message follows conventional commit format
     if (!isValidCommitMessage(message)) {
@@ -89,6 +89,6 @@ export const generateAICommitMessage = async () => {
 // Utility function to validate commit message format
 const isValidCommitMessage = (message) => {
   const conventionalCommitRegex =
-    /^(feat|fix|docs|style|refactor|test|chore)\([a-z0-9-\/]+\): [a-zA-Z0-9- _.,]+$/;
+    /^(feat|fix|docs|style|refactor|test|chore)\([a-zA-Z0-9-\/_.]+\): [a-zA-Z0-9- _.,]+$/;
   return conventionalCommitRegex.test(message);
 };
