@@ -1,18 +1,85 @@
 import { execSync } from "child_process";
 import fetch from "node-fetch";
+import { CohereClient } from "cohere-ai";
 import dotenv from "dotenv";
 
 // Load environment variables
 dotenv.config();
 
-// Check for Deepseek API key
-if (!process.env.DEEPSEEK_API_KEY) {
-  throw new Error("DEEPSEEK_API_KEY is not set in environment variables");
-}
-
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 
-export const generateAICommitMessage = async () => {
+// Initialize Cohere client if API key is available
+let cohereClient = null;
+if (process.env.COHERE_API_KEY) {
+  cohereClient = new CohereClient({
+    token: process.env.COHERE_API_KEY,
+  });
+}
+
+const generateWithCohere = async (prompt) => {
+  if (!cohereClient) {
+    throw new Error("Cohere API key not configured");
+  }
+
+  const response = await cohereClient.generate({
+    prompt: prompt,
+    maxTokens: 50,
+    temperature: 0.05,
+    stopSequences: ["\n"],
+  });
+
+  if (!response.generations || response.generations.length === 0) {
+    throw new Error("No response from Cohere API");
+  }
+
+  return response.generations[0].text.trim();
+};
+
+const generateWithDeepseek = async (prompt) => {
+  if (!process.env.DEEPSEEK_API_KEY) {
+    throw new Error("Deepseek API key not configured");
+  }
+
+  const response = await fetch(DEEPSEEK_API_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "deepseek-chat",
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a commit message generator that follows conventional commit format strictly.",
+        },
+        {
+          role: "user",
+          content: prompt,
+        },
+      ],
+      max_tokens: 50,
+      temperature: 0.05,
+      stop: ["\n"],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Deepseek API error: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data = await response.json();
+  if (!data.choices || data.choices.length === 0) {
+    throw new Error("No response from Deepseek API");
+  }
+
+  return data.choices[0].message.content.trim();
+};
+
+export const generateAICommitMessage = async (preferredProvider = "cohere") => {
   try {
     const stagedDiff = execSync("git diff --staged").toString();
     const filesChanged = execSync("git diff --staged --name-only").toString();
@@ -76,45 +143,18 @@ export const generateAICommitMessage = async () => {
     Respond ONLY with the commit message in the specified format, including specific details like numerical changes.
     `;
 
-    const response = await fetch(DEEPSEEK_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are a commit message generator that follows conventional commit format strictly.",
-          },
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        max_tokens: 50,
-        temperature: 0.05,
-        stop: ["\n"],
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Deepseek API error: ${response.status} ${response.statusText}`
-      );
+    // Try preferred provider first, then fallback
+    let message;
+    try {
+      message = await (preferredProvider === "deepseek"
+        ? generateWithDeepseek(prompt)
+        : generateWithCohere(prompt));
+    } catch (error) {
+      console.log(`Failed with ${preferredProvider}, trying fallback...`);
+      message = await (preferredProvider === "deepseek"
+        ? generateWithCohere(prompt)
+        : generateWithDeepseek(prompt));
     }
-
-    const data = await response.json();
-    console.log("Raw response from model:", data);
-
-    if (!data.choices || data.choices.length === 0) {
-      throw new Error("No response from Deepseek API");
-    }
-
-    let message = data.choices[0].message.content.trim();
 
     console.log("Raw message from model:", message);
 
