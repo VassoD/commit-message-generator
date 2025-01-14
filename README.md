@@ -19,7 +19,7 @@ An AI-powered CLI tool for generating concise, meaningful, and conventional git 
 - Git installed and configured
 - One of the following API keys:
   - Cohere API key (free tier available at [cohere.com](https://cohere.com))
-  - Deepseek API key (paid, available at [deepseek.ai](https://deepseek.ai))
+  - Deepseek API key (paid, available at [deepseek.com](https://deepseek.com))
 
 ## Installation 🚀
 
