@@ -1,18 +1,16 @@
 import { execSync } from "child_process";
-import { CohereClient } from "cohere-ai";
+import fetch from "node-fetch";
 import dotenv from "dotenv";
 
 // Load environment variables
 dotenv.config();
 
-// Initialize Cohere client with API key from environment variables
-if (!process.env.COHERE_API_KEY) {
-  throw new Error("COHERE_API_KEY is not set in environment variables");
+// Check for Deepseek API key
+if (!process.env.DEEPSEEK_API_KEY) {
+  throw new Error("DEEPSEEK_API_KEY is not set in environment variables");
 }
 
-const cohere = new CohereClient({
-  token: process.env.COHERE_API_KEY,
-});
+const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
 
 export const generateAICommitMessage = async () => {
   try {
@@ -20,50 +18,103 @@ export const generateAICommitMessage = async () => {
     const filesChanged = execSync("git diff --staged --name-only").toString();
 
     const prompt = `
-    Generate a conventional commit message based on the exact code changes in the diff. The type should accurately represent the nature of the change, and the description should precisely describe what was modified. Keep the description concise and under 50 characters.
-    
-    Rules:
-    1. Use the "docs" type for changes to documentation, comments, or README.md.
-    2. Use the "style" type ONLY for changes involving formatting, whitespace, or indentation.
-    3. Use the "refactor" type for improvements to functionality or code structure.
-    4. Use the "chore" type for maintenance tasks like dependency updates or configuration changes.
-    5. Always include a scope in the format: type(scope): description.
-    6. Be specific in the description: mention exactly what was changed, but keep it concise.
-    
-    Format: type(scope): description
-    
-    Types:
-    - feat: new features
-    - fix: bug fixes
-    - docs: documentation
-    - style: formatting
-    - refactor: code restructuring
-    - test: testing
-    - chore: maintenance
-    
+    Generate a conventional commit message that precisely describes the code changes. Follow these comprehensive guidelines for a high-quality commit message:
+
+    Core Rules:
+    1. Subject line (first line) MUST:
+       - Be 50 characters or less
+       - Start with type(scope): format
+       - Use imperative mood ("add" not "added" or "adds")
+       - Start with lowercase
+       - No period at the end
+       - Describe WHAT the change does, not HOW
+
+    Type Categories (must be one of):
+    - feat: New feature or significant enhancement that adds functionality
+    - fix: Bug fix or error correction
+    - docs: Documentation changes only (README, comments, etc.)
+    - style: Changes that don't affect code meaning (whitespace, formatting, etc.)
+    - refactor: Code changes that neither fix bugs nor add features
+    - test: Adding/modifying test cases
+    - chore: Maintenance tasks (dependency updates, build changes, etc.)
+
+    Important Type Selection Rules:
+    - For changes to the AI prompt/rules: Always use "refactor" as it improves core functionality
+    - For formatting only: use "style"
+    - For new capabilities: use "feat"
+    - When improving existing behavior: use "refactor"
+
+    Scope Guidelines:
+    - Use lowercase
+    - Be specific to the changed component/module
+    - Use short but meaningful terms
+    - Examples: api, auth, core, ui, utils, tests
+    - For multiple areas, use the most important one
+
+    Description Best Practices:
+    - Be specific and precise
+    - Focus on the WHY and WHAT, not the HOW
+    - Mention key technical details when relevant
+    - Use technical terms accurately
+    - Reference issue numbers if applicable
+
+    Examples of Excellent Commits:
+    - feat(auth): implement oauth2 login flow
+    - fix(api): handle undefined user responses
+    - refactor(core): simplify data processing pipeline
+    - docs(readme): add deployment instructions
+    - style(ui): align form elements consistently
+    - test(utils): add unit tests for date formatter
+    - chore(deps): update dependencies to latest versions
+
     Files changed:
     ${filesChanged}
-    
+
     Exact changes:
     ${stagedDiff.slice(0, 3000)}
-    
+
     Respond ONLY with the commit message in the specified format, including specific details like numerical changes.
     `;
 
-    const response = await cohere.generate({
-      prompt: prompt,
-      maxTokens: 50,
-      temperature: 0.1,
-      stopSequences: ["\n"],
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a commit message generator that follows conventional commit format strictly.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        max_tokens: 50,
+        temperature: 0.05,
+        stop: ["\n"],
+      }),
     });
 
-    console.log("Raw response from model:", response);
-
-    if (!response.generations || response.generations.length === 0) {
-      throw new Error("No response from Cohere API");
+    if (!response.ok) {
+      throw new Error(
+        `Deepseek API error: ${response.status} ${response.statusText}`
+      );
     }
 
-    let message = response.generations[0].text.trim();
+    const data = await response.json();
+    console.log("Raw response from model:", data);
+
+    if (!data.choices || data.choices.length === 0) {
+      throw new Error("No response from Deepseek API");
+    }
+
+    let message = data.choices[0].message.content.trim();
 
     console.log("Raw message from model:", message);
 
