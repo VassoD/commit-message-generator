@@ -148,6 +148,6 @@ export const generateAICommitMessage = async () => {
 // Utility function to validate commit message format
 const isValidCommitMessage = (message) => {
   const conventionalCommitRegex =
-    /^(feat|fix|docs|style|refactor|test|chore)\([a-zA-Z0-9-_/.]+\): [a-zA-Z0-9- _.,]+$/;
+    /^(feat|fix|docs|style|refactor|test|chore)\([a-zA-Z0-9-_/.]+\): [a-zA-Z0-9- _.,@/]+$/;
   return conventionalCommitRegex.test(message);
 };
