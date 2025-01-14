@@ -20,8 +20,8 @@ export class CommitMessageGenerator {
         return;
       }
 
-      // Generate AI commit message
-      const message = await generateAICommitMessage();
+      // Generate AI commit message with specified provider
+      const message = await generateAICommitMessage(this.options.provider);
 
       if (message) {
         console.log("\nSuggested commit message:");
