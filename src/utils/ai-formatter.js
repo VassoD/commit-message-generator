@@ -2,11 +2,14 @@ import { execSync } from "child_process";
 import fetch from "node-fetch";
 import { CohereClient } from "cohere-ai";
 import dotenv from "dotenv";
+import fs from "fs/promises";
+import path from "path";
 
 // Load environment variables
 dotenv.config();
 
 const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions";
+const PERFORMANCE_LOG_FILE = "model_performance.jsonl";
 
 // Initialize Cohere client if API key is available
 let cohereClient = null;
@@ -16,23 +19,64 @@ if (process.env.COHERE_API_KEY) {
   });
 }
 
+const logPerformance = async (data) => {
+  try {
+    const logEntry = {
+      ...data,
+      timestamp: new Date().toISOString(),
+      git_hash: execSync("git rev-parse HEAD").toString().trim(),
+      files_changed: execSync("git diff --staged --name-only")
+        .toString()
+        .split("\n")
+        .filter(Boolean),
+    };
+
+    await fs.appendFile(PERFORMANCE_LOG_FILE, JSON.stringify(logEntry) + "\n");
+  } catch (error) {
+    console.error("Failed to log performance:", error);
+  }
+};
+
 const generateWithCohere = async (prompt) => {
   if (!cohereClient) {
     throw new Error("Cohere API key not configured");
   }
 
-  const response = await cohereClient.generate({
-    prompt: prompt,
-    maxTokens: 50,
-    temperature: 0.05,
-    stopSequences: ["\n"],
-  });
+  const startTime = Date.now();
+  try {
+    const response = await cohereClient.generate({
+      prompt: prompt,
+      maxTokens: 50,
+      temperature: 0.05,
+      stopSequences: ["\n"],
+    });
 
-  if (!response.generations || response.generations.length === 0) {
-    throw new Error("No response from Cohere API");
+    if (!response.generations || response.generations.length === 0) {
+      throw new Error("No response from Cohere API");
+    }
+
+    const message = response.generations[0].text.trim();
+    const duration = Date.now() - startTime;
+
+    await logPerformance({
+      provider: "cohere",
+      duration_ms: duration,
+      success: true,
+      tokens_used: response.generations[0].tokens || 0,
+      message,
+    });
+
+    return message;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    await logPerformance({
+      provider: "cohere",
+      duration_ms: duration,
+      success: false,
+      error: error.message,
+    });
+    throw error;
   }
-
-  return response.generations[0].text.trim();
 };
 
 const generateWithDeepseek = async (prompt) => {
@@ -40,43 +84,66 @@ const generateWithDeepseek = async (prompt) => {
     throw new Error("Deepseek API key not configured");
   }
 
-  const response = await fetch(DEEPSEEK_API_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "deepseek-chat",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a commit message generator that follows conventional commit format strictly.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      max_tokens: 50,
-      temperature: 0.05,
-      stop: ["\n"],
-    }),
-  });
+  const startTime = Date.now();
+  try {
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a commit message generator that follows conventional commit format strictly.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        max_tokens: 50,
+        temperature: 0.05,
+        stop: ["\n"],
+      }),
+    });
 
-  if (!response.ok) {
-    throw new Error(
-      `Deepseek API error: ${response.status} ${response.statusText}`
-    );
+    if (!response.ok) {
+      throw new Error(
+        `Deepseek API error: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const data = await response.json();
+    if (!data.choices || data.choices.length === 0) {
+      throw new Error("No response from Deepseek API");
+    }
+
+    const message = data.choices[0].message.content.trim();
+    const duration = Date.now() - startTime;
+
+    await logPerformance({
+      provider: "deepseek",
+      duration_ms: duration,
+      success: true,
+      tokens_used: data.usage?.total_tokens || 0,
+      message,
+    });
+
+    return message;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    await logPerformance({
+      provider: "deepseek",
+      duration_ms: duration,
+      success: false,
+      error: error.message,
+    });
+    throw error;
   }
-
-  const data = await response.json();
-  if (!data.choices || data.choices.length === 0) {
-    throw new Error("No response from Deepseek API");
-  }
-
-  return data.choices[0].message.content.trim();
 };
 
 export const generateAICommitMessage = async (preferredProvider = "cohere") => {
@@ -145,12 +212,17 @@ export const generateAICommitMessage = async (preferredProvider = "cohere") => {
 
     // Try preferred provider first, then fallback
     let message;
+    let usedFallback = false;
+    let finalProvider = preferredProvider;
+
     try {
       message = await (preferredProvider === "deepseek"
         ? generateWithDeepseek(prompt)
         : generateWithCohere(prompt));
     } catch (error) {
       console.log(`Failed with ${preferredProvider}, trying fallback...`);
+      usedFallback = true;
+      finalProvider = preferredProvider === "deepseek" ? "cohere" : "deepseek";
       message = await (preferredProvider === "deepseek"
         ? generateWithCohere(prompt)
         : generateWithDeepseek(prompt));
@@ -171,12 +243,27 @@ export const generateAICommitMessage = async (preferredProvider = "cohere") => {
     console.log("Cleaned message:", message);
 
     // Validate the message follows conventional commit format
-    if (!isValidCommitMessage(message)) {
+    const isValid = isValidCommitMessage(message);
+    if (!isValid) {
       console.log("\nInvalid message generated:", message);
+      await logPerformance({
+        provider: finalProvider,
+        used_fallback: usedFallback,
+        message_valid: false,
+        final_message: message,
+        validation_error: "Does not follow conventional commit format",
+      });
       throw new Error(
         "Generated message does not follow conventional commit format"
       );
     }
+
+    await logPerformance({
+      provider: finalProvider,
+      used_fallback: usedFallback,
+      message_valid: true,
+      final_message: message,
+    });
 
     return message;
   } catch (error) {
