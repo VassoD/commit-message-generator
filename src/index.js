@@ -17,9 +17,20 @@ program
     "-i, --interactive",
     "Interactive mode - choose from multiple suggestions"
   )
+  .option(
+    "-p, --provider <provider>",
+    "AI provider to use (cohere or deepseek)",
+    "cohere"
+  )
   .parse(process.argv);
 
 const options = program.opts();
+
+// Validate provider option
+if (options.provider && !["cohere", "deepseek"].includes(options.provider)) {
+  console.error("Error: provider must be either 'cohere' or 'deepseek'");
+  process.exit(1);
+}
 
 // Create and run the generator
 const generator = new CommitMessageGenerator(options);
